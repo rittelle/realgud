@@ -35,13 +35,16 @@ realgud-loc-pat struct")
 (defconst realgud:gdb-frame-file-regexp
   (format "\\(.+\\):%s" realgud:regexp-captured-num))
 
+(defconst realgud:gdb-token-regexp
+  "[0-9]*")
+
 ;; Regular expression that describes a lldb location generally shown
 ;; before a command prompt. NOTE: we assume annotate 1!
 ;; For example:
-;; /src/build/ruby-2.1.5/main.c:24:454:beg:0x55555557659f
+;; *stopped,reason="breakpoint-hit",disp="del",bkptno="11",frame={addr="0x00005555555722ef",func="main",args=[{name="argc",value="1"},{name="argv",value="0x7fffffffd8d8"}],file="../path",fullname="/home/user/path",line="42",arch="i386:x86-64"},thread-id="1",stopped-threads="all",core="6"
 (setf (gethash "loc" realgud:gdb-pat-hash)
       (make-realgud-loc-pat
-       :regexp (format "^%s:%s:beg:0x\\([0-9a-f]+\\)"
+       :regexp (format "^~\"\\\\032\\\\032%s:%s:beg:0x\\([0-9a-f]+\\)\\\\n\""
 		       realgud:gdb-frame-file-regexp realgud:regexp-captured-num)
        :file-group 1
        :line-group 2
@@ -52,37 +55,28 @@ realgud-loc-pat struct")
 ;;   (gdb)
 (setf (gethash "prompt" realgud:gdb-pat-hash)
       (make-realgud-loc-pat
-       :regexp   "^(gdb) "
+       :regexp   "^(gdb) *"
        ))
 
 ;; Regular expression that describes a "breakpoint set" line
 ;; For example:
-;;   Breakpoint 1, main (argc=1, argv=0x7fffffffdbd8) at main.c:24
+;;   =breakpoint-created,bkpt={number="12",type="breakpoint",disp="keep",enabled="y",addr="0x0000555555572378",func="main(int, char**)",file="../path",fullname="/home/user/path",line="10",thread-groups=["i1"],times="0",original-location="/path:10"}
 (setf (gethash "brkpt-set" realgud:gdb-pat-hash)
-      (list
-       (make-realgud-loc-pat
-	:regexp (format "^Breakpoint %s at 0x\\([0-9a-f]*\\): file \\(.+\\), line %s[.]\n"
-			realgud:regexp-captured-num realgud:regexp-captured-num)
-	:num 1
-	:file-group 3
-	:line-group 4)
-       ;; Another breakpoint pattern seen
-       (make-realgud-loc-pat
-	:regexp (format "^Breakpoint %s, .* at \\(.+\\):%s[.]\n"
-			realgud:regexp-captured-num realgud:regexp-captured-num)
-	:num 1
-	:file-group 2
-	:line-group 3)
-       ))
+      (make-realgud-loc-pat
+       :regexp (format "^=breakpoint-created,bkpt={number=\"%s\",.*addr=\"0x\\([0-9a-f]*\\)\",.*fullname=\"\\(.+\\)\",.*line=\"%s\".*$"
+        	       realgud:regexp-captured-num realgud:regexp-captured-num)
+       :num 1
+       :file-group 3
+       :line-group 4))
 
 ;; Regular expression that describes a debugger "delete" (breakpoint)
 ;; response.
 ;; For example:
-;;   Deleted breakpoint 1
-;;   Deleted breakpoints 1 2 3 4
+;;   =breakpoint-deleted,id="12"
 (setf (gethash "brkpt-del" realgud:gdb-pat-hash)
       (make-realgud-loc-pat
-       :regexp "^Deleted breakpoints? \\(\\([0-9]+ *\\)+\\)\n"
+       :regexp (format "^=breakpoint-deleted,id=\"%s\"$"
+        	       realgud:regexp-captured-num realgud:regexp-captured-num)
        :num 1))
 
 (defconst realgud:gdb-frame-start-regexp
@@ -93,20 +87,22 @@ realgud-loc-pat struct")
 
 ;; Regular expression that describes a gdb "backtrace" command line.
 ;; For example:
-;; #0  main (argc=2, argv=0xbffff564, envp=0xbffff570) at main.c:935
-;; #1  0xb7e9f4a5 in *__GI___strdup (s=0xbffff760 "/tmp/remake/remake") at strdup.c:42
-;; #2  0x080593ac in main (argc=2, argv=0xbffff5a4, envp=0xbffff5b0)
-;;    at main.c:952
-;; #46 0xb7f51b87 in vm_call_cfunc (th=0x804d188, reg_cfp=0xb7ba9e88, num=0,
-;;    recv=157798080, blockptr=0x0, me=0x80d12a0) at vm_insnhelper.c:410
+;; ~"#0  main (argc=2, argv=0xbffff564, envp=0xbffff570) at main.c:935\n"
+;; ~"#1  0xb7e9f4a5 in *__GI___strdup (s=0xbffff760 "/tmp/remake/remake") at strdup.c:42\n"
+;; ~"#2  0x080593ac in main (argc=2, argv=0xbffff5a4, envp=0xbffff5b0)
+;;    at main.c:952\n"
+;; ~"#46 0xb7f51b87 in vm_call_cfunc (th=0x804d188, reg_cfp=0xb7ba9e88, num=0,
+;;    recv=157798080, blockptr=0x0, me=0x80d12a0) at vm_insnhelper.c:410\n"
 
 (setf (gethash "debugger-backtrace" realgud:gdb-pat-hash)
       (make-realgud-loc-pat
-       :regexp 	(concat realgud:gdb-frame-start-regexp
-			realgud:gdb-frame-num-regexp
-			"\\(?:.\\|\\(?:[\n] \\)\\)+[ ]+at "
-			realgud:gdb-frame-file-regexp
-			)
+       :regexp (concat "~\""
+                realgud:gdb-frame-start-regexp
+                       realgud:gdb-frame-num-regexp
+                       "\\(?:.\\|\\(?:[\n] \\)\\)+[ ]+at "
+                       realgud:gdb-frame-file-regexp
+                       "\\\\n\""
+                       )
        :num 1
        :file-group 2
        :line-group 3)

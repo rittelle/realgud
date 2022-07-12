@@ -120,7 +120,7 @@ fringe and marginal icons.
 "
 
   (interactive)
-  (let* ((cmd-str (or opt-cmd-line (realgud:gdb-query-cmdline "gdb")))
+  (let* ((cmd-str (or opt-cmd-line (realgud:gdb-query-cmdline "gdb"))) ;; TODO: add --interpreter mi3 option
 	 (cmd-args (split-string-and-unquote cmd-str))
 	 (parsed-args (realgud:gdb-parse-cmd-args cmd-args))
 	 (script-args (cl-caddr parsed-args))
